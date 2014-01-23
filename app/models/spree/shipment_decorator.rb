@@ -39,24 +39,15 @@ module Spree
     # Account for situations where we can't track the line_item for a variant.
     # This should avoid exceptions when users upgrade from spree 1.3
     def manifest
-      items = []
-      inventory_units.joins(:variant).includes(:variant, :line_item).group_by(&:variant).each do |variant, units|
+      inventory_units.group_by(&:variant).map do |variant, units|
+        states = {}
+        units.group_by(&:state).each { |state, iu| states[state] = iu.count }
 
-        units.group_by(&:line_item).each do |line_item, units|
-          states = {}
-          units.group_by(&:state).each { |state, iu| states[state] = iu.count }
-          line_item ||= order.find_line_item_by_variant(variant)
+        line_item ||= order.find_line_item_by_variant(variant)
+        part = line_item ? line_item.product.assembly? : false
 
-          part = line_item ? line_item.product.assembly? : false
-          items << OpenStruct.new(part: part,
-                                  product: line_item.try(:product),
-                                  line_item: line_item,
-                                  variant: variant,
-                                  quantity: units.length,
-                                  states: states)
-        end
+        OpenStruct.new(part: part, product: line_item.try(:product), line_item: line_item, variant: variant, quantity: units.length, states: states)
       end
-      items
     end
 
     # There might be scenarios where we don't want to display every single
